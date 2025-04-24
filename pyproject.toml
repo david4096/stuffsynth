@@ -1,0 +1,32 @@
+[project]
+name = "stuffsynth"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "clip",
+    "faiss-cpu==1.8.0",
+    "librosa>=0.10.0",
+    "matplotlib==3.7.0",
+    "numpy==1.22.0",
+    "opencv-python==4.5.5.64",
+    "pillow==8.4.0",
+    "plotly>=6.0.1",
+    "pydub>=0.25.1",
+    "pyqt5>=5.15.11",
+    "pythreejs>=2.4.2",
+    "pyyaml>=6.0.2",
+    "scikit-learn>=1.6.1",
+    "segment-anything",
+    "setuptools>=79.0.1",
+    "sounddevice>=0.5.1",
+    "torch==2.0.0",
+    "umap-learn>=0.5.7",
+    "uvicorn==0.18.2",
+    "vispy>=0.15.0",
+]
+
+[tool.uv.sources]
+clip = { git = "https://github.com/openai/CLIP.git", rev = "main" }
+segment-anything = { git = "https://github.com/facebookresearch/segment-anything.git" }

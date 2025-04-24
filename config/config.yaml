@@ -1,0 +1,19 @@
+models:
+  sam: models/sam_vit_b_01ec64.pth
+  clip: models/ViT-B-32.pt
+
+database:
+  faiss_index: database/objects.index
+  metadata_path: database/objects.meta.pkl
+  vector_dimension: 512  # Example dimension
+
+umap:
+  dim: 3
+  faiss_index: database/faiss_umap.index
+  metadata_path: database/faiss_umap.meta.pkl
+
+audio:
+  wav_directory: "/Users/david/Downloads/samples/trimmed"
+  embedding_dim: 512
+  faiss_index: database/wav_objects.index
+  metadata_path: database/wav_objects.meta.pkl
