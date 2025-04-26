@@ -79,76 +79,71 @@ class FAISSPCAVisualizerAndAudioPlayer:
         return self.audio_files[index]
 
     def play_loop(self, audio_file):
+        volume = 1
         try:
             audio_data, sr = librosa.load(audio_file, sr=self.sample_rate)
             logging.info(f"▶️ Playing: {audio_file}")
             with sd.OutputStream(channels=1, samplerate=self.sample_rate, blocksize=self.block_size) as stream:
                 while not self.stop_all_signal.is_set() and self.playing_threads.get(audio_file):
-                    stream.write(audio_data)
+                    stream.write(audio_data * volume)
         except Exception as e:
             logging.error(f"❌ Error playing {audio_file}: {e}")
 
     def update_playing_queue(self, new_file):
         if new_file in self.playing_queue:
-            logging.info(f"🔁 {new_file} already playing.")
+            print(f"🔁 {new_file} already playing.")
             return
 
         if len(self.playing_queue) >= self.playing_queue.maxlen:
             old_file = self.playing_queue.popleft()
             self.playing_threads[old_file] = False
-            logging.info(f"🛑 Stopped old sound: {old_file}")
+            print(f"🛑 Stopped old sound: {old_file}")
 
         self.playing_queue.append(new_file)
         self.playing_threads[new_file] = True
-        logging.info(f"🟢 Starting new sound: {new_file}")
+        print(f"🟢 Starting new sound: {new_file}")
         
         t = threading.Thread(target=self.play_loop, args=(new_file,), daemon=True)
         t.start()
-        logging.info(f"🧵 Thread launched for: {new_file} | Active queue: {list(self.playing_queue)}")
+        print(f"🧵 Thread launched for: {new_file} | Active queue: {list(self.playing_queue)}")
 
     def run(self):
         logging.info("🚀 Audio playback service started.")
+        last_played_file = None
+
         while True:
             self.load_db()
 
-            # If no vectors, wait and continue
             current_vector_count = self.index.ntotal
             if current_vector_count <= 0:
                 logging.info("⏳ No vectors yet...")
                 time.sleep(self.refresh_interval)
                 continue
 
-            # Track if the metadata has been updated
-            metadata_updated = False
-            latest_seen_timestamp = None
-            latest_seen_label = None
+            new_vectors = self.index.reconstruct_n(0, current_vector_count)
 
-            # Check for any metadata changes and find the latest timestamp
-            for metadata in self.metadata:
-                if "last_seen" in metadata and (latest_seen_timestamp is None or metadata["last_seen"] > latest_seen_timestamp):
-                    latest_seen_timestamp = metadata["last_seen"]
-                    latest_seen_label = metadata["label"]
-                    metadata_updated = True
+            if self.pca_matrix is None or self.pca_matrix.d_in != new_vectors.shape[1]:
+                self.train_pca(new_vectors)
 
-            if metadata_updated:
-                logging.info(f"📈 Latest seen label: {latest_seen_label} at {latest_seen_timestamp}")
+            try:
+                proj = self.apply_pca(new_vectors)
+                norm = (proj - proj.min()) / (proj.max() - proj.min() + 1e-8)
+                latest_val = norm[-1][0]
+                selected_file = self.get_audio_by_pca(latest_val)
 
-                # Retrieve the vector for the latest seen label and its embedding
-                idx = next(i for i, m in enumerate(self.metadata) if m["label"] == latest_seen_label)
-                embedding = self.index.reconstruct(idx)
-                
-                # PCA projection and audio selection
-                try:
-                    proj = self.apply_pca(embedding)
-                    norm = (proj - proj.min()) / (proj.max() - proj.min() + 1e-8)
-                    latest_val = norm[-1][0]
-                    selected_file = self.get_audio_by_pca(latest_val)
-                    logging.info(f"▶️ Playing: {selected_file}")
+                if selected_file != last_played_file:
                     self.update_playing_queue(selected_file)
-                except Exception as e:
-                    logging.error(f"❌ PCA or audio update failed: {e}")
-            
+                    last_played_file = selected_file
+                else:
+                    # If already playing, ensure it stays active (could trigger reset logic if needed)
+                    if selected_file not in self.playing_queue:
+                        self.update_playing_queue(selected_file)
+
+            except Exception as e:
+                logging.error(f"❌ PCA or audio update failed: {e}")
+
             time.sleep(self.refresh_interval)
+
 
 
 if __name__ == "__main__":

@@ -2,38 +2,38 @@ import faiss
 import numpy as np
 import os
 import pickle
+import logging
 
 class FAISSDatabase:
     def __init__(self, dim, db_path, metadata_path=None):
         self.db_path = db_path
         self.metadata_path = metadata_path or db_path + ".meta.pkl"
         self.index = faiss.IndexFlatL2(dim)
-        self.metadata = []
+        self.metadata = {}  # Changed to dict keyed by label
 
         if os.path.exists(db_path):
             self.load()
-            
+
     def update_metadata(self, label: str, field: str, value):
-        for meta in self.metadata:
-            if meta.get("label") == label:
-                meta[field] = value
-                self.save()
-                return
-        logging.warning(f"Label {label} not found in metadata.")
+        if label in self.metadata:
+            self.metadata[label][field] = value
+            self.save()
+        else:
+            logging.warning(f"Label {label} not found in metadata.")
 
-
-
-    def add(self, vectors: np.ndarray, metadata: list):
+    def add(self, vectors: np.ndarray, metadata: list[dict]):
         if not self.index.is_trained:
             self.index.train(vectors)
         self.index.add(vectors)
-        self.metadata.extend(metadata)
-        print(metadata)
+
+        for entry in metadata:
+            label = entry["label"]
+            self.metadata[label] = entry
         self.save()
 
     def search(self, query: np.ndarray, k=5):
         distances, indices = self.index.search(query, k)
-        results = [self.metadata[i] for i in indices[0]]
+        results = [list(self.metadata.values())[i] for i in indices[0]]
         return results, distances
 
     def save(self):
